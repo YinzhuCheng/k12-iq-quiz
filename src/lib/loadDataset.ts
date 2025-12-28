@@ -3,6 +3,8 @@ import type { Question, QuestionType } from '../types';
 
 type RawRow = Record<string, unknown>;
 
+const DATASET_CANDIDATES = ['/output_k12_mcq_zh.xlsx', '/dataset.xlsx'] as const;
+
 function asString(v: unknown): string {
   if (v === null || v === undefined) return '';
   return String(v);
@@ -26,16 +28,24 @@ function normalizeType(raw: unknown): QuestionType {
   return 'Multiple Choice';
 }
 
-export async function loadDatasetFromPublicXlsx(): Promise<Question[]> {
-  const res = await fetch('/dataset.xlsx', { cache: 'no-cache' });
-  if (!res.ok) throw new Error(`Failed to fetch /dataset.xlsx (${res.status})`);
-  const buf = await res.arrayBuffer();
+async function fetchFirstAvailableXlsx(): Promise<{ url: string; buf: ArrayBuffer }> {
+  let lastStatus = '';
+  for (const url of DATASET_CANDIDATES) {
+    const res = await fetch(url, { cache: 'no-cache' });
+    if (res.ok) return { url, buf: await res.arrayBuffer() };
+    lastStatus = `${url} (${res.status})`;
+  }
+  throw new Error(`Failed to fetch dataset xlsx. Last tried: ${lastStatus}`);
+}
+
+export async function loadDatasetFromPublicXlsx(): Promise<{ questions: Question[]; sourceUrl: string }> {
+  const { url: sourceUrl, buf } = await fetchFirstAvailableXlsx();
 
   const wb = XLSX.read(buf, { type: 'array' });
   const sheetName = wb.SheetNames[0];
-  if (!sheetName) throw new Error('dataset.xlsx has no sheets');
+  if (!sheetName) throw new Error(`${sourceUrl} has no sheets`);
   const ws = wb.Sheets[sheetName];
-  if (!ws) throw new Error('dataset.xlsx first sheet is missing');
+  if (!ws) throw new Error(`${sourceUrl} first sheet is missing`);
 
   const rows = XLSX.utils.sheet_to_json<RawRow>(ws, { defval: '' });
   const questions: Question[] = [];
@@ -67,9 +77,9 @@ export async function loadDatasetFromPublicXlsx(): Promise<Question[]> {
   }
 
   if (questions.length === 0) {
-    throw new Error('No questions parsed from dataset.xlsx');
+    throw new Error(`No questions parsed from ${sourceUrl}`);
   }
 
-  return questions;
+  return { questions, sourceUrl };
 }
 

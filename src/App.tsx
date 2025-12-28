@@ -25,6 +25,7 @@ function isCorrect(q: Question, user: string): boolean {
 export function App() {
   const [questions, setQuestions] = useState<Question[] | null>(null);
   const [error, setError] = useState<string>('');
+  const [datasetUrl, setDatasetUrl] = useState<string>('');
 
   const [view, setView] = useState<QuizView>('start');
   const [currentId, setCurrentId] = useState<string>('');
@@ -37,9 +38,14 @@ export function App() {
   const timerRef = useRef<number | null>(null);
 
   useEffect(() => {
+    document.title = 'K12拓扑学测试题';
+  }, []);
+
+  useEffect(() => {
     loadDatasetFromPublicXlsx()
-      .then((qs) => {
+      .then(({ questions: qs, sourceUrl }) => {
         setQuestions(qs);
+        setDatasetUrl(sourceUrl);
 
         // init answers from localStorage
         const init: Record<string, string> = {};
@@ -212,10 +218,10 @@ export function App() {
         <div className="card" style={{ padding: 18 }}>
           <h1 className="title">加载失败</h1>
           <p className="subtitle">
-            无法读取 <code>/dataset.xlsx</code>。错误信息：<b>{error}</b>
+            无法读取题库 Excel。错误信息：<b>{error}</b>
           </p>
           <p className="subtitle" style={{ marginTop: 10 }}>
-            请确认仓库存在 <code>public/dataset.xlsx</code>，并在部署后可通过 <code>/dataset.xlsx</code> 访问。
+            请确认仓库存在 <code>public/output_k12_mcq_zh.xlsx</code>（优先）或 <code>public/dataset.xlsx</code>，并在部署后可通过对应 URL 访问。
           </p>
         </div>
       </div>
@@ -226,7 +232,7 @@ export function App() {
     return (
       <div className="container">
         <div className="card" style={{ padding: 18 }}>
-          <h1 className="title">正在加载题库…</h1>
+          <h1 className="title">K12拓扑学测试题</h1>
           <p className="subtitle">首次加载会在浏览器端解析 Excel（约 70+ 题）。</p>
         </div>
       </div>
@@ -246,13 +252,16 @@ export function App() {
       <MathJaxContext config={mathJaxConfig}>
         <div className="container">
           <div className="card" style={{ padding: 22 }}>
-            <h1 className="title">IQ 测试（网页版答题器）</h1>
+            <h1 className="title">K12拓扑学测试题</h1>
             <p className="subtitle">
               白底、居中、大按钮、题号矩阵跳题，支持图片放大与公式渲染。你的作答会自动保存到浏览器（localStorage），刷新不会丢失。
             </p>
             <p className="subtitle" style={{ marginTop: 10 }}>
               <b>Data loaded.</b> 已读取题库，共 <b>{questions.length}</b> 题。
             </p>
+            <div className="muted" style={{ marginTop: 10, fontSize: 14 }}>
+              题库来源：<code>{datasetUrl || '(unknown)'}</code>
+            </div>
 
             <div style={{ display: 'flex', gap: 12, flexWrap: 'wrap', marginTop: 18 }}>
               <button className="btn primary" onClick={startNew}>
@@ -273,7 +282,7 @@ export function App() {
             </div>
 
             <div style={{ marginTop: 16 }} className="muted">
-              题量：<b>{questions.length}</b> 题（数据来自 <code>/dataset.xlsx</code>），图片来自 <code>/images/</code>。
+              题量：<b>{questions.length}</b> 题，图片来自 <code>/images/</code>。
             </div>
 
             {sampleImage ? (
