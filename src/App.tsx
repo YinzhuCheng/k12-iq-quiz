@@ -237,6 +237,11 @@ export function App() {
   if (view === 'start') {
     const hasProgress = !!startedAt && answeredCount > 0;
     const hasSubmitted = !!submittedAt;
+    const sampleImage = (() => {
+      const hit = questions.find((q) => (q.image ?? '').trim());
+      if (!hit?.image) return '';
+      return hit.image.startsWith('/') ? hit.image : `/${hit.image}`;
+    })();
     return (
       <MathJaxContext config={mathJaxConfig}>
         <div className="container">
@@ -244,6 +249,9 @@ export function App() {
             <h1 className="title">IQ 测试（网页版答题器）</h1>
             <p className="subtitle">
               白底、居中、大按钮、题号矩阵跳题，支持图片放大与公式渲染。你的作答会自动保存到浏览器（localStorage），刷新不会丢失。
+            </p>
+            <p className="subtitle" style={{ marginTop: 10 }}>
+              <b>Data loaded.</b> 已读取题库，共 <b>{questions.length}</b> 题。
             </p>
 
             <div style={{ display: 'flex', gap: 12, flexWrap: 'wrap', marginTop: 18 }}>
@@ -267,6 +275,20 @@ export function App() {
             <div style={{ marginTop: 16 }} className="muted">
               题量：<b>{questions.length}</b> 题（数据来自 <code>/dataset.xlsx</code>），图片来自 <code>/images/</code>。
             </div>
+
+            {sampleImage ? (
+              <div style={{ marginTop: 14 }}>
+                <div className="muted" style={{ marginBottom: 8 }}>
+                  图片示例（来自 <code>/images/...</code>）：
+                </div>
+                <img
+                  className="img"
+                  style={{ maxHeight: 220, cursor: 'default' }}
+                  src={sampleImage}
+                  alt="sample"
+                />
+              </div>
+            ) : null}
           </div>
         </div>
       </MathJaxContext>
