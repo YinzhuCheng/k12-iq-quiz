@@ -21,6 +21,19 @@ function pickText(question: Question): { stem: string; options: string[] } {
   return { stem, options };
 }
 
+function stripLeadingChoiceLabel(raw: string, letter: string): string {
+  // Remove duplicated prefixes like "A:", "A：", "A.", "(A)", "A、", "A)" etc.
+  // Only strips when the prefix matches the expected option letter.
+  const s = raw.trim();
+  const escaped = letter.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+  const re = new RegExp(
+    `^\\s*(?:\\(?\\s*${escaped}\\s*\\)?\\s*)[\\.:：、\\-)\\]]\\s*`,
+    'i',
+  );
+  const out = s.replace(re, '').trimStart();
+  return out || s;
+}
+
 function renderStemWithImagePlaceholder(stem: string, imageNode: React.ReactNode | null) {
   if (!imageNode) return [{ text: stem }];
   const parts = stem.split('<image1>');
@@ -112,6 +125,7 @@ export function QuestionPanel(props: {
           <div className="options" role="radiogroup" aria-label="Multiple Choice Options">
             {options.map((opt, i) => {
               const letter = letters(i);
+              const optText = stripLeadingChoiceLabel(opt, letter);
 
               const isCorrect = props.mode === 'review' && letter === correctAnswer;
               const isUser = props.mode === 'review' && letter === userAnswer;
@@ -145,7 +159,7 @@ export function QuestionPanel(props: {
                     </div>
                     <div style={{ marginTop: 6 }}>
                       <MathJax dynamic inline>
-                        <span>{opt}</span>
+                        <span>{optText}</span>
                       </MathJax>
                     </div>
                   </div>
@@ -156,7 +170,7 @@ export function QuestionPanel(props: {
         ) : (
           <div>
             <div className="muted" style={{ marginBottom: 8 }}>
-              填空题：请输入你的答案（严格匹配，提交时会自动 trim）。
+              填空题：请输入你的答案。
             </div>
             <input
               className="input"

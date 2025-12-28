@@ -6,6 +6,7 @@ export type Meta = {
   view?: 'start' | 'quiz' | 'result';
   currentId?: string;
   reviewId?: string;
+  nickname?: string;
 };
 
 export function loadMeta(): Meta {

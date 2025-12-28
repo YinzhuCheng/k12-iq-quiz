@@ -26,6 +26,7 @@ export function App() {
   const [questions, setQuestions] = useState<Question[] | null>(null);
   const [error, setError] = useState<string>('');
   const [datasetUrl, setDatasetUrl] = useState<string>('');
+  const [nickname, setNickname] = useState<string>('');
 
   const [view, setView] = useState<QuizView>('start');
   const [currentId, setCurrentId] = useState<string>('');
@@ -53,6 +54,7 @@ export function App() {
         setAnswers(init);
 
         const meta = loadMeta();
+        setNickname((meta.nickname ?? '').trim());
         const started = typeof meta.startedAt === 'number' ? meta.startedAt : undefined;
         const submitted = typeof meta.submittedAt === 'number' ? meta.submittedAt : undefined;
 
@@ -243,24 +245,34 @@ export function App() {
   if (view === 'start') {
     const hasProgress = !!startedAt && answeredCount > 0;
     const hasSubmitted = !!submittedAt;
-    const sampleImage = (() => {
-      const hit = questions.find((q) => (q.image ?? '').trim());
-      if (!hit?.image) return '';
-      return hit.image.startsWith('/') ? hit.image : `/${hit.image}`;
-    })();
     return (
       <MathJaxContext config={mathJaxConfig}>
         <div className="container">
           <div className="card" style={{ padding: 22 }}>
             <h1 className="title">K12拓扑学测试题</h1>
-            <p className="subtitle">
-              白底、居中、大按钮、题号矩阵跳题，支持图片放大与公式渲染。你的作答会自动保存到浏览器（localStorage），刷新不会丢失。
-            </p>
-            <p className="subtitle" style={{ marginTop: 10 }}>
-              <b>Data loaded.</b> 已读取题库，共 <b>{questions.length}</b> 题。
-            </p>
-            <div className="muted" style={{ marginTop: 10, fontSize: 14 }}>
-              题库来源：<code>{datasetUrl || '(unknown)'}</code>
+            <p className="subtitle">准备好了吗？给自己取个昵称，开始闯关吧。</p>
+
+            <div style={{ display: 'grid', gap: 10, marginTop: 14 }}>
+              <div>
+                <div className="muted" style={{ marginBottom: 8, fontSize: 14 }}>
+                  昵称（可选）
+                </div>
+                <input
+                  className="input"
+                  value={nickname}
+                  onChange={(e) => {
+                    const v = e.target.value;
+                    setNickname(v);
+                    persistMeta({ nickname: v });
+                  }}
+                  placeholder="例如：小拓扑 / Euler / 认真答题的我"
+                  maxLength={24}
+                />
+              </div>
+              <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap', alignItems: 'center' }}>
+                <span className="badge">题量：{questions.length}</span>
+                <span className="badge">题库：{datasetUrl.replace('/', '') || 'unknown'}</span>
+              </div>
             </div>
 
             <div style={{ display: 'flex', gap: 12, flexWrap: 'wrap', marginTop: 18 }}>
@@ -280,24 +292,6 @@ export function App() {
                 </button>
               ) : null}
             </div>
-
-            <div style={{ marginTop: 16 }} className="muted">
-              题量：<b>{questions.length}</b> 题，图片来自 <code>/images/</code>。
-            </div>
-
-            {sampleImage ? (
-              <div style={{ marginTop: 14 }}>
-                <div className="muted" style={{ marginBottom: 8 }}>
-                  图片示例（来自 <code>/images/...</code>）：
-                </div>
-                <img
-                  className="img"
-                  style={{ maxHeight: 220, cursor: 'default' }}
-                  src={sampleImage}
-                  alt="sample"
-                />
-              </div>
-            ) : null}
           </div>
         </div>
       </MathJaxContext>
@@ -401,7 +395,15 @@ export function App() {
               <h1 className="title" style={{ marginBottom: 6 }}>
                 测试结果
               </h1>
-              <div className="muted">点击题号可进入回顾（Review）模式查看详情。</div>
+              <div className="muted">
+                {nickname.trim() ? (
+                  <>
+                    {nickname.trim()}，做得不错！点击题号可进入回顾（Review）模式查看详情。
+                  </>
+                ) : (
+                  <>点击题号可进入回顾（Review）模式查看详情。</>
+                )}
+              </div>
             </div>
             <div className="resultNums">
               <span className="badge success">
