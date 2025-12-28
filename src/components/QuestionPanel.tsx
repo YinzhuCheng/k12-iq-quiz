@@ -1,6 +1,7 @@
 import React from 'react';
 import { MathJax } from 'better-react-mathjax';
 import type { Question } from '../types';
+import { normalizeMathText } from '../lib/mathText';
 
 function letters(i: number) {
   return String.fromCharCode('A'.charCodeAt(0) + i);
@@ -34,18 +35,6 @@ function stripLeadingChoiceLabel(raw: string, letter: string): string {
   return out || s;
 }
 
-function renderStemWithImagePlaceholder(stem: string, imageNode: React.ReactNode | null) {
-  if (!imageNode) return [{ text: stem }];
-  const parts = stem.split('<image1>');
-  if (parts.length === 1) return [{ text: stem }];
-  const out: Array<{ text?: string; image?: true }> = [];
-  for (let i = 0; i < parts.length; i++) {
-    out.push({ text: parts[i] });
-    if (i < parts.length - 1) out.push({ image: true });
-  }
-  return out;
-}
-
 export function QuestionPanel(props: {
   index: number; // 0-based
   total: number;
@@ -76,8 +65,6 @@ export function QuestionPanel(props: {
       </div>
     ) : null;
 
-  const hasPlaceholder = stem.includes('<image1>');
-
   const correctAnswer = (props.correctAnswer ?? props.question.answer ?? '').trim();
   const userAnswer = (props.value ?? '').trim();
 
@@ -100,32 +87,20 @@ export function QuestionPanel(props: {
         </div>
 
         <div className="qStem">
-          {(() => {
-            const segs = renderStemWithImagePlaceholder(stem || '(题干为空)', hasPlaceholder ? imageEl : null);
-            return (
-              <>
-                {segs.map((seg, idx) => (
-                  <React.Fragment key={idx}>
-                    {seg.image ? imageEl : null}
-                    {typeof seg.text === 'string' ? (
-                      <MathJax dynamic inline>
-                        <span>{seg.text}</span>
-                      </MathJax>
-                    ) : null}
-                  </React.Fragment>
-                ))}
-              </>
-            );
-          })()}
+          <MathJax dynamic inline>
+            <span>{normalizeMathText(stem || '(题干为空)')}</span>
+          </MathJax>
         </div>
 
-        {!hasPlaceholder ? imageEl : null}
+        {/* Always render image below the text (ignore <image1> placeholder) */}
+        {imageEl}
 
         {props.question.questionType === 'Multiple Choice' ? (
           <div className="options" role="radiogroup" aria-label="Multiple Choice Options">
             {options.map((opt, i) => {
               const letter = letters(i);
               const optText = stripLeadingChoiceLabel(opt, letter);
+              const optDisplay = normalizeMathText(optText);
 
               const isCorrect = props.mode === 'review' && letter === correctAnswer;
               const isUser = props.mode === 'review' && letter === userAnswer;
@@ -159,7 +134,7 @@ export function QuestionPanel(props: {
                     </div>
                     <div style={{ marginTop: 6 }}>
                       <MathJax dynamic inline>
-                        <span>{optText}</span>
+                        <span>{optDisplay}</span>
                       </MathJax>
                     </div>
                   </div>

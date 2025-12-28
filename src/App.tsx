@@ -1,9 +1,12 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { MathJaxContext } from 'better-react-mathjax';
+import html2canvas from 'html2canvas';
+import { jsPDF } from 'jspdf';
 import type { Question, QuizView } from './types';
 import { loadDatasetFromPublicXlsx } from './lib/loadDataset';
 import { clearAll, getAnswer, loadMeta, saveMeta, setAnswer } from './lib/storage';
 import { formatDuration } from './lib/time';
+import { isAnswerCardV1, safeFilenamePart, type AnswerCardV1 } from './lib/answerCard';
 import { ImageModal } from './components/ImageModal';
 import { QuestionGrid, type GridItem } from './components/QuestionGrid';
 import { QuestionPanel } from './components/QuestionPanel';
@@ -34,6 +37,9 @@ export function App() {
 
   const [answers, setAnswers] = useState<Record<string, string>>({});
   const [zoomSrc, setZoomSrc] = useState<string | null>(null);
+
+  const importInputRef = useRef<HTMLInputElement | null>(null);
+  const reportRef = useRef<HTMLDivElement | null>(null);
 
   const [now, setNow] = useState<number>(() => Date.now());
   const timerRef = useRef<number | null>(null);
@@ -129,9 +135,10 @@ export function App() {
 
   function startNew() {
     if (!questions) return;
+    const keepNickname = nickname;
     clearAll(questions.map((q) => q.id));
     const startedAt = Date.now();
-    saveMeta({ startedAt, view: 'quiz', currentId: questions[0].id, reviewId: questions[0].id });
+    saveMeta({ startedAt, view: 'quiz', currentId: questions[0].id, reviewId: questions[0].id, nickname: keepNickname });
     const init: Record<string, string> = {};
     for (const q of questions) init[q.id] = '';
     setAnswers(init);
@@ -201,6 +208,119 @@ export function App() {
     const next: Record<string, string> = {};
     for (const q of questions) next[q.id] = '';
     setAnswers(next);
+  }
+
+  function downloadJson(filename: string, obj: unknown) {
+    const blob = new Blob([JSON.stringify(obj, null, 2)], { type: 'application/json;charset=utf-8' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = filename;
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+    URL.revokeObjectURL(url);
+  }
+
+  function exportAnswerCard() {
+    if (!questions) return;
+    const m = loadMeta();
+    const exportedAt = Date.now();
+    const percent = score.total ? Math.round((score.correct / score.total) * 1000) / 10 : 0;
+    const card: AnswerCardV1 = {
+      version: 1,
+      exportedAt,
+      datasetUrl: datasetUrl || undefined,
+      nickname: (m.nickname ?? nickname ?? '').trim() || undefined,
+      startedAt: typeof m.startedAt === 'number' ? m.startedAt : undefined,
+      submittedAt: typeof m.submittedAt === 'number' ? m.submittedAt : undefined,
+      score:
+        typeof m.submittedAt === 'number'
+          ? { correct: score.correct, total: score.total, percent }
+          : undefined,
+      answers: {},
+    };
+    for (const q of questions) card.answers[q.id] = answers[q.id] ?? '';
+
+    const name = safeFilenamePart(card.nickname ?? '');
+    const ts = new Date(exportedAt).toISOString().replace(/[:.]/g, '-');
+    downloadJson(`answer-card_${name}_${ts}.json`, card);
+  }
+
+  function triggerImport() {
+    importInputRef.current?.click();
+  }
+
+  async function handleImportFile(file: File) {
+    if (!questions) return;
+    const ok = window.confirm('导入会覆盖当前浏览器中的作答与进度。确定继续吗？');
+    if (!ok) return;
+
+    const text = await file.text();
+    let parsed: unknown;
+    try {
+      parsed = JSON.parse(text);
+    } catch {
+      window.alert('导入失败：不是有效的 JSON 文件。');
+      return;
+    }
+    if (!isAnswerCardV1(parsed)) {
+      window.alert('导入失败：不是识别的答题卡格式（version: 1）。');
+      return;
+    }
+
+    const card = parsed as AnswerCardV1;
+    const nextAnswers: Record<string, string> = {};
+    for (const q of questions) {
+      const v = typeof card.answers[q.id] === 'string' ? card.answers[q.id] : '';
+      setAnswer(q.id, v);
+      nextAnswers[q.id] = v;
+    }
+    setAnswers(nextAnswers);
+
+    const startedAt = typeof card.startedAt === 'number' ? card.startedAt : Date.now();
+    const submittedAt = typeof card.submittedAt === 'number' ? card.submittedAt : undefined;
+    const nn = (card.nickname ?? '').trim();
+    setNickname(nn);
+
+    const firstId = questions[0]?.id ?? '';
+    saveMeta({
+      ...loadMeta(),
+      nickname: nn,
+      startedAt,
+      submittedAt,
+      currentId: firstId,
+      reviewId: firstId,
+      view: submittedAt ? 'result' : 'quiz',
+    });
+    setCurrentId(firstId);
+    setReviewId(firstId);
+    setView(submittedAt ? 'result' : 'quiz');
+  }
+
+  async function exportPdfReport() {
+    if (!reportRef.current) return;
+    const node = reportRef.current;
+    const canvas = await html2canvas(node, { backgroundColor: '#ffffff', scale: 2 });
+    const imgData = canvas.toDataURL('image/png');
+
+    const pdf = new jsPDF({ orientation: 'p', unit: 'pt', format: 'a4' });
+    const pageW = pdf.internal.pageSize.getWidth();
+    const pageH = pdf.internal.pageSize.getHeight();
+
+    const imgW = canvas.width;
+    const imgH = canvas.height;
+    const ratio = Math.min(pageW / imgW, pageH / imgH);
+    const w = imgW * ratio;
+    const h = imgH * ratio;
+    const x = (pageW - w) / 2;
+    const y = 32;
+
+    pdf.addImage(imgData, 'PNG', x, y, w, h);
+
+    const name = safeFilenamePart(nickname);
+    const ts = new Date().toISOString().replace(/[:.]/g, '-');
+    pdf.save(`report_${name}_${ts}.pdf`);
   }
 
   const mathJaxConfig = useMemo(
@@ -279,6 +399,12 @@ export function App() {
               <button className="btn primary" onClick={startNew}>
                 开始测试
               </button>
+              <button className="btn" onClick={exportAnswerCard}>
+                导出答题卡（JSON）
+              </button>
+              <button className="btn" onClick={triggerImport}>
+                导入答题卡
+              </button>
 
               {hasProgress ? (
                 <button className="btn" onClick={continueQuiz}>
@@ -292,6 +418,19 @@ export function App() {
                 </button>
               ) : null}
             </div>
+
+            <input
+              ref={importInputRef}
+              type="file"
+              accept="application/json"
+              style={{ display: 'none' }}
+              onChange={(e) => {
+                const f = e.target.files?.[0];
+                if (f) void handleImportFile(f);
+                // allow re-select same file
+                e.currentTarget.value = '';
+              }}
+            />
           </div>
         </div>
       </MathJaxContext>
@@ -321,6 +460,12 @@ export function App() {
                 </span>
               </div>
               <div className="actions">
+                <button className="btn" onClick={exportAnswerCard}>
+                  导出答题卡
+                </button>
+                <button className="btn" onClick={triggerImport}>
+                  导入答题卡
+                </button>
                 <button className="btn danger" onClick={clearAnswers}>
                   清空作答
                 </button>
@@ -366,6 +511,18 @@ export function App() {
           </div>
 
           {zoomSrc ? <ImageModal src={zoomSrc} onClose={() => setZoomSrc(null)} /> : null}
+
+          <input
+            ref={importInputRef}
+            type="file"
+            accept="application/json"
+            style={{ display: 'none' }}
+            onChange={(e) => {
+              const f = e.target.files?.[0];
+              if (f) void handleImportFile(f);
+              e.currentTarget.value = '';
+            }}
+          />
         </div>
       </MathJaxContext>
     );
@@ -433,9 +590,43 @@ export function App() {
                   <button className="btn" onClick={continueQuiz}>
                     返回答题页继续修改
                   </button>
+                  <button className="btn" onClick={exportAnswerCard}>
+                    导出答题卡（JSON）
+                  </button>
+                  <button className="btn" onClick={triggerImport}>
+                    导入答题卡
+                  </button>
+                  <button className="btn" onClick={() => void exportPdfReport()}>
+                    导出成绩单（PDF）
+                  </button>
                   <button className="btn danger" onClick={startNew}>
                     重新开始（清空并重置）
                   </button>
+                </div>
+
+                <div ref={reportRef} className="card" style={{ padding: 14, marginBottom: 12, borderStyle: 'dashed' }}>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', gap: 10, flexWrap: 'wrap' }}>
+                    <div>
+                      <div style={{ fontSize: 16, fontWeight: 700 }}>K12拓扑学测试题 · 成绩单</div>
+                      <div className="muted" style={{ marginTop: 6 }}>
+                        昵称：<b>{nickname.trim() || '匿名'}</b>
+                      </div>
+                      <div className="muted" style={{ marginTop: 4 }}>
+                        题库：<code>{datasetUrl || '(unknown)'}</code>
+                      </div>
+                    </div>
+                    <div style={{ textAlign: 'right' }}>
+                      <div className="badge success" style={{ display: 'inline-flex' }}>
+                        得分：{score.correct} / {score.total}
+                      </div>
+                      <div style={{ marginTop: 8 }}>
+                        <span className="badge">正确率：{percent}%</span>
+                      </div>
+                      <div style={{ marginTop: 8 }}>
+                        <span className="badge">总用时：{formatDuration(elapsedMs)}</span>
+                      </div>
+                    </div>
+                  </div>
                 </div>
 
                 <QuestionPanel
@@ -459,6 +650,18 @@ export function App() {
         </div>
 
         {zoomSrc ? <ImageModal src={zoomSrc} onClose={() => setZoomSrc(null)} /> : null}
+
+        <input
+          ref={importInputRef}
+          type="file"
+          accept="application/json"
+          style={{ display: 'none' }}
+          onChange={(e) => {
+            const f = e.target.files?.[0];
+            if (f) void handleImportFile(f);
+            e.currentTarget.value = '';
+          }}
+        />
       </div>
     </MathJaxContext>
   );
