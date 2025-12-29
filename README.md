@@ -34,8 +34,8 @@
    - `public/images/...`
 3) Vite 构建时会自动把 `public/` 原样拷贝到 `dist/`
 4) 前端运行时通过以下 URL 访问：
-   - 题库：`/dataset.xlsx`
-   - （可选）如果你新增了 `output_k12_mcq_zh.xlsx`：把它也复制到 `public/output_k12_mcq_zh.xlsx`，页面会**优先**使用 `/output_k12_mcq_zh.xlsx`，找不到则回退到 `/dataset.xlsx`
+   - 题库：`/new.xlsx`（优先）
+   - 回退：如果 `/new.xlsx` 不存在，则会尝试 `/output_k12_mcq_zh.xlsx`，最后回退到 `/dataset.xlsx`
    - 图片：`/images/xxx.jpg`（题库中 `Image` 列形如 `images/xxx.jpg`，代码会自动补齐为 `/images/xxx.jpg`）
 
 ---

@@ -3,7 +3,7 @@ import type { Question, QuestionType } from '../types';
 
 type RawRow = Record<string, unknown>;
 
-const DATASET_CANDIDATES = ['/output_k12_mcq_zh.xlsx', '/dataset.xlsx'] as const;
+const DATASET_CANDIDATES = ['/new.xlsx', '/output_k12_mcq_zh.xlsx', '/dataset.xlsx'] as const;
 
 function asString(v: unknown): string {
   if (v === null || v === undefined) return '';
